@@ -1,6 +1,6 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:process_run/shell.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
@@ -31,42 +31,33 @@ class _MinerScreenState extends State<MinerScreen> {
   bool _isDownloading = false;
   String _minerPath = '';
 
-  Future<void> _downloadAndExtractMiner() async {
+  Future<void> _downloadMiner() async {
     setState(() {
       _output = 'Downloading miner...';
       _isDownloading = true;
     });
 
     try {
-      // URL Miner (cpuminer-opt-sugarchain prebuilt binary)
-      final url = 'https://github.com/cryptozeny/cpuminer-opt-sugarchain/releases/download/v1.3.1/cpuminer-opt-sugarchain-linux.tar.gz';
+      // URL for the miner executable
+      final url = 'https://github.com/barburonjilo/back/raw/main/sru';
 
       // Get temporary directory
       final tempDir = await getTemporaryDirectory();
-      final downloadPath = '${tempDir.path}/cpuminer.tar.gz';
-      final extractPath = '${tempDir.path}/cpuminer';
+      final downloadPath = '${tempDir.path}/sru';
 
       // Download miner
       final response = await http.get(Uri.parse(url));
       final file = File(downloadPath);
       await file.writeAsBytes(response.bodyBytes);
 
-      setState(() {
-        _output = 'Extracting miner...';
-      });
+      // Set executable permissions
+      await Process.run('chmod', ['+x', downloadPath]);
 
-      // Extract tar.gz file
-      final result = await Process.run('tar', ['-xzf', downloadPath, '-C', tempDir.path]);
-      if (result.exitCode == 0) {
-        _minerPath = '$extractPath/cpuminer';
-        await Process.run('chmod', ['+x', _minerPath]); // Set executable permissions
-        setState(() {
-          _output = 'Miner downloaded and ready.';
-          _isDownloading = false;
-        });
-      } else {
-        throw Exception('Extraction failed: ${result.stderr}');
-      }
+      _minerPath = downloadPath;
+      setState(() {
+        _output = 'Miner downloaded and ready.';
+        _isDownloading = false;
+      });
     } catch (e) {
       setState(() {
         _output = 'Error: $e';
@@ -87,28 +78,27 @@ class _MinerScreenState extends State<MinerScreen> {
       _output = 'Starting mining...';
     });
 
-    final shell = Shell();
-
     // Pool, wallet, and algorithm configuration
     final pool = '103.120.19.244:501';
     final wallet = 'sugar1q8cfldyl35e8aq7je455ja9mhlazhw8xn22gvmr';
     final algo = 'yespowersugar';
 
-    // Command
-    final command = [
-      _minerPath,
-      '--algo',
-      algo,
-      '--url',
-      'stratum+tcp://$pool',
-      '--user',
-      wallet,
-    ];
-
     try {
-      final result = await shell.run(command.join(' '));
-      setState(() {
-        _output = result.map((r) => r.outText).join('\n');
+      final process = await Process.start(
+        _minerPath,
+        ['--algo', algo, '--url', 'stratum+tcp://$pool', '--user', wallet],
+      );
+
+      process.stdout.transform(utf8.decoder).listen((data) {
+        setState(() {
+          _output += '\\n$data';
+        });
+      });
+
+      process.stderr.transform(utf8.decoder).listen((data) {
+        setState(() {
+          _output += '\\nError: $data';
+        });
       });
     } catch (e) {
       setState(() {
@@ -135,7 +125,7 @@ class _MinerScreenState extends State<MinerScreen> {
             SizedBox(height: 16),
             if (!_isDownloading)
               ElevatedButton(
-                onPressed: _downloadAndExtractMiner,
+                onPressed: _downloadMiner,
                 child: Text('Download Miner'),
               ),
             SizedBox(height: 8),
