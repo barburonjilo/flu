@@ -1,0 +1,13 @@
+name: sugarchain_miner
+description: A simple Flutter app to run Sugarchain mining.
+version: 1.0.0+1
+
+environment:
+  sdk: ">=2.19.0 <3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.2
+  path_provider: ^2.0.14
+  process_run: ^0.12.0
